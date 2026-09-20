@@ -1,14 +1,14 @@
-# NanoChat
+# PicoChat
 
 From-scratch GPT: custom BPE → pretrain → SFT → RL (optional) → chat demo.
 
 Inspired by Karpathy’s [nanochat](https://github.com/karpathy/nanochat) and the GPT speedrun. Same idea — plain PyTorch, no trainer frameworks — not a fork.
 
-**Demo:** [seif-222--nanochat-chat-serve.modal.run](https://seif-222--nanochat-chat-serve.modal.run) (~20 seconds cold start)
+**Demo:** [seif-222--picochat-chat-serve.modal.run](https://seif-222--picochat-chat-serve.modal.run) (~20 seconds cold start)
 
 **Write-up:** [Training a 253M chat model from scratch](WRITEUP.md)
 
-**W&B:** [seif-222-student/Nanochat](https://wandb.ai/seif-222-student/Nanochat)
+**W&B:** [seif-222-student/PicoChat](https://wandb.ai/seif-222-student/PicoChat)
 
 253.2M params · ~1.97B pretrain tokens · ~13 hours on 1× A100-80GB · ~$40 in useful GPU compute on Modal.
 
@@ -98,12 +98,12 @@ GRPO on GSM8K is in the repo. **Not launched** (mainly because of the scale). SF
 ## Infra
 
 * Shards on Hugging Face: `seif-222/Tokenized_FineWebEdu_Shards`
-* Train on Modal (`nanochat-training`, volume `nanochat-data`): data, pretrain, SFT, RL
-* Serve on a separate Modal app (`nanochat-chat`)
+* Train on Modal (`picochat-training`, volume `nanochat-data`): data, pretrain, SFT, RL
+* Serve on a separate Modal app (`picochat-chat`)
 
 Load `output/Models/SFT/model_checkpoint_best.pt`.
 
-[seif-222/NanoChat](https://github.com/seif-222/NanoChat)
+[seif-222/PicoChat](https://github.com/seif-222/PicoChat)
 
 ---
 
@@ -142,7 +142,7 @@ Full validation split (10,042 examples):
 ## Files
 
 ```
-NanoChat/
+PicoChat/
 ├── Config.py              # model + training configuration
 ├── Model.py               # GPT architecture + KV cache
 ├── optimizer.py           # MuonAdamW

@@ -68,6 +68,14 @@ for f in attrs:
     setattr(config, f, getattr(_base_cfg, f))
 config.sft_data_path = os.environ.get('SFT_DATA_PATH', config.sft_data_path)  # Modal override, falls back to Config.py default
 
+# pickled pretrain config still has the old wandb_project; take current Config.py
+wandb_attrs = (
+    'use_wandb', 'wandb_project', 'wandb_entity', 'wandb_run_name',
+    'wandb_mode', 'wandb_log_samples', 'wandb_watch_model', 'wandb_watch_model_steps',
+)
+for f in wandb_attrs:
+    setattr(config, f, getattr(_base_cfg, f))
+
 # 3. ---- Scale LRs down for FineTuning --
 config.matrix_lr      *= config.sft_lr_scale
 config.unembedding_lr *= config.sft_lr_scale

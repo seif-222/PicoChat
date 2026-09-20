@@ -147,9 +147,9 @@ class GPT_config:
 
     # -------------------- Weights & Biases --------------------
     use_wandb: bool = True                    # log to W&B
-    wandb_project: str = 'Nanochat'           # project name
+    wandb_project: str = 'PicoChat'           # project name
     wandb_entity: Optional[str] = 'seif-222-student'   # account/team
-    wandb_run_name: Optional[str] = 'Nanochat_SFT_Run'   # cont -> floor-LR continuation of the pretrain run (2199 -> 3750), new wandb run id
+    wandb_run_name: Optional[str] = 'PicoChat_SFT_Run'   # cont -> floor-LR continuation of the pretrain run (2199 -> 3750), new wandb run id
     wandb_run_id: Optional[str] = None        # resume id
     wandb_mode: str = 'online'                # 'online' | 'offline' | 'disabled'
     wandb_log_samples: bool = True            # log samples as a table

@@ -1,8 +1,8 @@
-# NanoChat: Training a 253M Chat Model From Scratch on $30 a Month
+# PicoChat: Training a 253M Chat Model From Scratch on $30 a Month
 
 Before this project I built nanoGPT. I understood every line of it, but it was a paper recreation, and it was only pretraining: no tokenizer training, no SFT, no RL, no inference engine, and none of the newer architecture ideas. So I wanted to go deeper and build the full pipeline of a real chat model.
 
-NanoChat is the full pipeline, built from scratch in plain PyTorch with no trainer frameworks:
+PicoChat is the full pipeline, built from scratch in plain PyTorch with no trainer frameworks:
 
 - a custom BPE tokenizer
 - pretraining
@@ -14,7 +14,7 @@ It's inspired by Karpathy's nanochat and the modded-nanoGPT speedrun, but it's n
 
 **253.2M parameters · ~1.97B pretraining tokens · ~13 hours on one A100-80GB · ~$40 of useful GPU compute on Modal.**
 
-Demo: seif-222--nanochat-chat-serve.modal.run (about 20 seconds cold start) · Repo: seif-222/NanoChat · W&B: seif-222-student/Nanochat
+Demo: seif-222--picochat-chat-serve.modal.run (about 20 seconds cold start) · Repo: seif-222/PicoChat · W&B: seif-222-student/PicoChat
 
 ---
 

@@ -11,7 +11,7 @@ import modal
 
 HF_DATASET_REPO = "seif-222/Tokenized_FineWebEdu_Shards"
 
-APP_NAME = "nanochat-training"
+APP_NAME = "picochat-training"
 VOLUME_NAME = "nanochat-data"
 
 app = modal.App(APP_NAME)
@@ -28,17 +28,17 @@ image = (
         "wandb",
         "huggingface_hub",
     )
-    .add_local_file("Config.py", "/root/nanochat/Config.py")
-    .add_local_file("Model.py", "/root/nanochat/Model.py")
-    .add_local_file("DataLoader.py", "/root/nanochat/DataLoader.py")
-    .add_local_file("Tokenizer.py", "/root/nanochat/Tokenizer.py")
-    .add_local_file("optimizer.py", "/root/nanochat/optimizer.py")
-    .add_local_file("HellaSwag.py", "/root/nanochat/HellaSwag.py")
-    .add_local_file("train_utils.py", "/root/nanochat/train_utils.py")
-    .add_local_file("Train.py", "/root/nanochat/Train.py")
-    .add_local_file("train_sft.py", "/root/nanochat/train_sft.py")
-    .add_local_file("Engine.py", "/root/nanochat/Engine.py")
-    .add_local_file("train_rl.py", "/root/nanochat/train_rl.py")
+    .add_local_file("Config.py", "/root/picochat/Config.py")
+    .add_local_file("Model.py", "/root/picochat/Model.py")
+    .add_local_file("DataLoader.py", "/root/picochat/DataLoader.py")
+    .add_local_file("Tokenizer.py", "/root/picochat/Tokenizer.py")
+    .add_local_file("optimizer.py", "/root/picochat/optimizer.py")
+    .add_local_file("HellaSwag.py", "/root/picochat/HellaSwag.py")
+    .add_local_file("train_utils.py", "/root/picochat/train_utils.py")
+    .add_local_file("Train.py", "/root/picochat/Train.py")
+    .add_local_file("train_sft.py", "/root/picochat/train_sft.py")
+    .add_local_file("Engine.py", "/root/picochat/Engine.py")
+    .add_local_file("train_rl.py", "/root/picochat/train_rl.py")
 )
 
 MOUNT_PATH = "/data"
@@ -80,7 +80,7 @@ def train_model_remote():
     try:
         subprocess.run(
             ["python", "Train.py"],
-            cwd="/root/nanochat",
+            cwd="/root/picochat",
             env={**os.environ, "LOG_DIR": f"{MOUNT_PATH}/checkpoints", "PYTHONUNBUFFERED": "1"},
             check=True,
         )
@@ -103,7 +103,7 @@ def train_model_ddp_remote(nproc: int = 2):
     try:
         subprocess.run(
             ["torchrun", "--standalone", f"--nproc_per_node={nproc}", "Train.py"],
-            cwd="/root/nanochat",
+            cwd="/root/picochat",
             env={**os.environ, "LOG_DIR": f"{MOUNT_PATH}/checkpoints", "PYTHONUNBUFFERED": "1"},
             check=True,
         )
@@ -134,7 +134,7 @@ def train_sft_remote(pretrain_checkpoint: str = "", data_path: str = ""):
     if data_path:
         env["SFT_DATA_PATH"] = f"{MOUNT_PATH}/{data_path}"
     try:
-        subprocess.run(["python", "train_sft.py"], cwd="/root/nanochat", env=env, check=True)
+        subprocess.run(["python", "train_sft.py"], cwd="/root/picochat", env=env, check=True)
     finally:
         volume.commit()
 
@@ -153,7 +153,7 @@ def train_rl_remote():
     try:
         subprocess.run(
             ["python", "train_rl.py"],
-            cwd="/root/nanochat",
+            cwd="/root/picochat",
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
             check=True,
         )
@@ -174,7 +174,7 @@ def final_eval_remote(checkpoint: str):
     import subprocess
     subprocess.run(
         ["python", "HellaSwag.py", "-c", f"{MOUNT_PATH}/checkpoints/{checkpoint}", "-t", f"{MOUNT_PATH}/tokenizer"],
-        cwd="/root/nanochat",
+        cwd="/root/picochat",
         check=True,
     )
 
