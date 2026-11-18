@@ -24,6 +24,153 @@ Distributed training is supported in the training scripts for larger-scale runs.
 
 ---
 
+## Run it locally
+
+The clone includes the model code and trained 65,536-token tokenizer. You can test both on CPU without downloading training data or model weights. To chat with the trained model, use the demo above or supply the SFT checkpoint described below.
+
+### Install and smoke-test
+
+From a Linux shell with Git and Python 3.12:
+
+```bash
+git clone https://github.com/seif-222/PicoChat.git
+cd PicoChat
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install 'torch==2.6.0' 'tiktoken==0.12.0'
+cd PicoChat
+```
+
+The second `cd PicoChat` enters the source directory containing `Config.py`. Run the remaining commands there. For GPU training, install a PyTorch build compatible with your CUDA driver. The CPU checks below were run with PyTorch 2.6.0 and tiktoken 0.12.0.
+
+```bash
+python - <<'PY'
+import torch
+from Config import GPT_config
+from Model import GPT
+from Tokenizer import RustTokenizer
+
+tokenizer = RustTokenizer.from_directory("output/tokenizer")
+text = "PicoChat from scratch."
+assert tokenizer.decode(tokenizer.encode(text)) == text
+torch.manual_seed(33)
+config = GPT_config(n_embd=32, n_head=2, n_kv_head=2, n_layer=4,
+                    block_size=12, vocab_size=64, window_size=4, device="cpu")
+model = GPT(config)
+tokens = torch.randint(0, config.vocab_size, (2, 10))
+logits, loss = model(tokens[:, :-1], tokens[:, 1:].contiguous())
+loss.backward()
+print(tokenizer.get_vocab_size(), tuple(logits.shape), bool(torch.isfinite(loss)))
+PY
+```
+
+Expected output: `65536 (2, 9, 64) True`. The tiny model uses random weights and synthetic token IDs to exercise a forward and backward pass.
+
+### Chat with the trained checkpoint
+
+The reported result uses SFT step 9,633. The checkpoint is separate from Git. If you have a trusted copy, set `PICOCHAT_CHECKPOINT` to its path. The original local layout was `output/Models/SFT/model_checkpoint_best.pt` inside the source directory. You can also use the best checkpoint from your own SFT run.
+
+```bash
+export PICOCHAT_CHECKPOINT=output/Models/SFT/model_checkpoint_best.pt
+python - <<'PY'
+import os
+from itertools import islice
+
+import torch
+from Config import GPT_config
+from Engine import InferenceEngine
+from Model import GPT
+from Tokenizer import RustTokenizer
+
+torch.set_num_threads(min(4, torch.get_num_threads()))
+with torch.serialization.safe_globals([GPT_config]):
+    ckpt = torch.load(os.environ["PICOCHAT_CHECKPOINT"], map_location="cpu",
+                      weights_only=True, mmap=True)
+cfg = ckpt["config"]
+cfg.device = "cpu"
+with torch.device("meta"):
+    model = GPT(cfg)
+model.load_state_dict(ckpt["model"], assign=True)
+model.eval()
+
+tokenizer = RustTokenizer.from_directory("output/tokenizer")
+messages = [{"role": "user", "content": "What is the capital of France?"},
+            {"role": "assistant", "content": ""}]
+prompt = torch.tensor([tokenizer.render_for_completion({"messages": messages})])
+eos = tokenizer.encode_special("<|assistant_end|>")
+stream = InferenceEngine(model).stream_generation(prompt, temperature=0, eos_token=eos)
+answer = []
+for token in islice(stream, 48):
+    if token.item() == eos:
+        break
+    answer.append(token.item())
+stream.close()
+print(tokenizer.decode(answer))
+PY
+```
+
+On the original SFT checkpoint this printed `The capital of France is Paris.`
+
+### Train and evaluate
+
+The full configuration was run on an A100 with 80 GB of GPU memory. For local training, use a CUDA-enabled environment and start with a fresh output directory. The trainer automatically resumes from checkpoints in its log directory.
+
+1. **Prepare the data.** Download the pretokenized FineWeb-Edu shards and build the SFT conversation file. This downloads several gigabytes. The tokenizer in Git matches the published shards.
+
+   ```bash
+   python -m pip install numpy datasets huggingface_hub tqdm requests
+   python - <<'PY'
+   from huggingface_hub import snapshot_download
+   snapshot_download(repo_id="seif-222/Tokenized_FineWebEdu_Shards",
+                     repo_type="dataset", local_dir="output/data/fineweb-edu_tokenized")
+   PY
+   python prepare_sft_data.py
+   ```
+
+2. **Set local paths in `Config.py`.** Set `tokenizer_dir` to `"output/tokenizer"`, `data_root` to `"output/data/fineweb-edu_tokenized"`, and `use_wandb` to `False` for a local run. The original Modal mount expects `/data/tokenizer/rustbpe_tokenizer.pkl`. The clone already supplies `output/tokenizer/rustbpe_tokenizer.pkl` relative to the source directory. Set the directory, not the `.pkl` filename. The defaults target the original Modal volume and W&B account. To use W&B, install `wandb` and set your own entity and project. Pretraining also downloads the HellaSwag validation data on its first evaluation.
+
+3. **Run pretraining, then supervised fine-tuning.** Run the commands separately so the base checkpoint exists before SFT starts.
+
+   ```bash
+   LOG_DIR=output/checkpoints/pretrain python Train.py
+   ```
+
+   ```bash
+   SFT_PRETRAIN_CKPT=output/checkpoints/pretrain/model_checkpoint_step_03750.pt \
+   SFT_DATA_PATH=output/data/sft_conversations.jsonl \
+   SFT_LOG_DIR=output/checkpoints/sft python train_sft.py
+   ```
+
+   For the chat example above, point `PICOCHAT_CHECKPOINT` at `output/checkpoints/sft/model_checkpoint_best.pt`. The committed config runs through step 3,750 with a cosine horizon of 2,200. The published run started with a horizon of 3,100, resumed from checkpoint 1,500 with the shorter horizon, then continued through step 3,750 at the learning-rate floor. To follow that schedule, first set `max_steps = 3100` and `training_steps = 3750`, launch the pretraining command, and stop after the step-1,500 checkpoint is written and before the next checkpoint. Set `max_steps = 2200`, leave `training_steps = 3750`, and run the same command with the same `LOG_DIR` to resume. A single uninterrupted run with the default configuration uses a different learning-rate history. The [write-up](WRITEUP.md) records the transitions and validation results.
+
+4. **Evaluate the checkpoint.** This invokes the repository’s HellaSwag evaluator for all 10,042 validation examples. On PyTorch 2.6 the checkpoint’s serialized configuration class requires explicit allowlisting. Use a checkpoint you trust.
+
+   ```bash
+   export PICOCHAT_CHECKPOINT=output/checkpoints/sft/model_checkpoint_best.pt
+   python - "$PICOCHAT_CHECKPOINT" <<'PY'
+   import runpy
+   import sys
+   import torch
+   from Config import GPT_config
+
+   sys.argv = ["HellaSwag.py", "-c", sys.argv[1], "-t", "output/tokenizer"]
+   with torch.serialization.safe_globals([GPT_config]):
+       runpy.run_path("HellaSwag.py", run_name="__main__")
+   PY
+   ```
+
+**Optional paths.** To rebuild the tokenizer and shards for a new run, install `rustbpe`, then run `python Train_tokenizer.py` followed by `python Shard_tokenization.py` in a separate checkout. Training a tokenizer writes to the same path as the bundled one. To experiment with GRPO after SFT, run `python gsm8k_data.py`, set `rl_log_dir` to a writable local directory in `Config.py`, and use:
+
+```bash
+RL_SFT_CKPT=output/checkpoints/sft/model_checkpoint_best.pt \
+RL_GSM8K_TRAIN=output/data/gsm8k/train.jsonl \
+RL_GSM8K_TEST=output/data/gsm8k/test.jsonl python train_rl.py
+```
+
+The published chat checkpoint ends at SFT. The optional RL stage and full training/benchmark runs were not repeated for the CPU smoke check.
+
+---
+
 ## Model
 
 253.2M trainable. `n_embd=896`, `n_layer=14`, `n_head=7`, context 1024, vocab 65,536.
